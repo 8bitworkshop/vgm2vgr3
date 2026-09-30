@@ -29,6 +29,8 @@
  * must live in ROM.
  */
 
+#define VGR3_FEAT_EXT	// for VGR3_EXT_LOAD wavetable load op
+
 #include "vgr3_format.h"
 #include "vgr3_play.h"
 //#link "vgr3_play.c"
