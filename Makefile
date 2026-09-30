@@ -79,3 +79,34 @@ clean:
 	rm -rf $(ROUNDTRIP_OUT)
 
 .PHONY: all clean samples roundtrip roundtrip-loop
+
+# Mixer host test (-DVGR3_MIXER): overlays a short sfx on a music track and
+# checks the merged output against two independent players.
+test/test_mixer: test/test_mixer.c vgr3_play.c vgr3_play.h vgr3_format.h
+	$(CC) $(CFLAGS) -I. -DVGR3_MIXER -o $@ test/test_mixer.c vgr3_play.c
+
+test/test_fade: test/test_fade.c vgr3_play.c vgr3_play.h vgr3_format.h
+	$(CC) $(CFLAGS) -I. -DVGR3_MIXER -DVGR3_FADE -o $@ test/test_fade.c vgr3_play.c
+
+mixertest: vgm2vgr3 test/test_mixer test/test_fade
+	@mkdir -p $(ROUNDTRIP_OUT)
+	./vgm2vgr3 --loop samples/sn76489/nightmarket.vgm $(ROUNDTRIP_OUT)/mx-music.vgr3 >/dev/null
+	./vgm2vgr3 samples/sn76489/8Jump.vgm $(ROUNDTRIP_OUT)/mx-sfx.vgr3 >/dev/null
+	./test/test_mixer $(ROUNDTRIP_OUT)/mx-music.vgr3 $(ROUNDTRIP_OUT)/mx-sfx.vgr3
+	./vgm2vgr3 --loop samples/nes/eiffel-nes.vgm $(ROUNDTRIP_OUT)/mx-nmusic.vgr3 >/dev/null
+	./vgm2vgr3 samples/nes/famitune-nes.vgm $(ROUNDTRIP_OUT)/mx-nsfx.vgr3 >/dev/null
+	./test/test_mixer $(ROUNDTRIP_OUT)/mx-nmusic.vgr3 $(ROUNDTRIP_OUT)/mx-nsfx.vgr3
+	./test/test_fade $(ROUNDTRIP_OUT)/mx-music.vgr3 $(ROUNDTRIP_OUT)/mx-sfx.vgr3 sn 2 5 8 10
+	./test/test_fade $(ROUNDTRIP_OUT)/mx-nmusic.vgr3 $(ROUNDTRIP_OUT)/mx-nsfx.vgr3 low 0 4 12
+
+# NES mixer demo (nes/mixdemo.c): stages the sources and two .vgr3 files in
+# nes/build/, then builds the ROM with the 8bitworkshop CLI if BWS points at
+# a checkout (make nes-demo BWS=~/PuzzlingPlans/8bitworkshop).
+nes-demo: vgm2vgr3
+	@mkdir -p nes/build
+	./vgm2vgr3 --loop samples/nes/eiffel-nes.vgm nes/build/eiffel.vgr3 >/dev/null
+	./vgm2vgr3 samples/nes/famitune-nes.vgm nes/build/sfx.vgr3 >/dev/null
+	cp nes/mixdemo.c vgr3_play.c vgr3_play.h vgr3_format.h nes/build/
+	@if [ -n "$(BWS)" ]; then \
+		cd $(BWS) && node gen/tools/8bws.js build -p nes $(CURDIR)/nes/build/mixdemo.c -o $(CURDIR)/nes/build/mixdemo.nes; \
+	else echo "staged nes/build; build with: node gen/tools/8bws.js build -p nes nes/build/mixdemo.c -o mixdemo.nes"; fi

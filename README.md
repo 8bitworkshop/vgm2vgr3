@@ -115,13 +115,55 @@ void vgr3Frame(Vgr3Player *p);
 - Deliberately dependency-free (no libc calls), so it compiles unmodified
   under a cross compiler like SDCC or cc65.
 
+## Optional: mixer (SFX overlay and fade)
+
+Build with `-DVGR3_MIXER` to play several `.vgr3` files at once: music on
+layer 0 and short sound effects on layers above it. `-DVGR3_FADE` adds a
+music fade-out. Neither exists in a plain build, and the decoder core is
+the same code either way. Design and measurements: `notes/sfxfade.md`.
+
+```c
+vgr3MixerInit(music);            /* layer 0 */
+vgr3MixerPlay(1, sfx);           /* overlay on layer 1 */
+vgr3MixerStop(1);                /* optional: an overlay stops itself */
+vgr3MixerFade(0, 4);             /* -DVGR3_FADE: fade layer 0 over 16*4 frames */
+vgr3MixerFrame();                /* once per tick */
+/* glue flushes g_mixer.outRegs / g_mixer.outDirty, then clears outDirty */
+```
+
+- Every layer keeps its own shadow registers and all layers' channels keep
+  running, so the music never pauses or desyncs. Only what reaches the
+  hardware is merged: a layer owns a register byte from the first time it
+  writes it, and the highest owner wins.
+- When an overlay stops, or one of its channels parks on `END`, the bytes it
+  held go back to the music at its current values. This includes note
+  triggers, so an interrupted note is retriggered rather than left silent.
+- Fade needs two per-chip hooks from the glue (`Vgr3FadeOps`: which bytes
+  are volumes, and how to attenuate one); `vgr3AttenLow4/SN/GB` cover the
+  common chips.
+- `-DVGR3_SINGLE_MIXER` drops the mixer pointer argument and uses one
+  static `g_mixer`, which is much cheaper on cc65/sdcc. Size the arrays
+  per platform with `VGR3_MAX_LAYERS`, `VGR3_MAX_CHANS` and
+  `VGR3_MAX_REGS` before including the header.
+- Decode cost is per channel playing, so budget for short 1-3 channel
+  effects, not a second full song. Flush the previous frame's writes first
+  and decode second in the interrupt to keep register writes at a fixed
+  offset.
+- Not yet covered: registers shared between voices (AY R7, NES `$4015`, GB
+  NR50-52, ...) and chips other than SN76489 and NES in the tests. See the
+  TODO in `notes/sfxfade.md`.
+
+`nes/mixdemo.c` is a NES demo: music, an SFX over it at frame 20, then a
+fade. `make nes-demo` stages it (`BWS=` a checkout of 8bitworkshop builds
+it).
+
 ## Platform glue
 
 Hardcoded, chip-specific players on top of `vgr3_play.c`:
 
 - `vgr3_coleco.c` -- ColecoVision, single SN76489 on the fixed OUT port;
   reconstructs the latch/data byte protocol from the shadow registers.
-- `vgr3_nes.c` -- NES APU, `$4000+r` for shadow byte `r`, ascending register order.
+- `vgr3_nes.c` -- NES APU, `$4000+r` for shadow byte `r`, ascending register order. Uses the mixer (with fade); the other players use the plain `Vgr3Player`.
 - `vgr3_pokey.c` -- Atari POKEY, `$D200+r`; ascending order keeps
   `AUDCTL` ahead of the `STIMER`/`SKRES` command registers.
 - `vgr3_gb.c` -- Game Boy DMG, `$FF10+r` for shadow bytes `0x00-0x16`
@@ -144,4 +186,7 @@ make roundtrip       # encodes every sample under samples/; vgm2vgr3
                      # source frame by frame, so a clean run is a real
                      # correctness signal across the whole sample set
 make roundtrip-loop  # same with --loop (exercises the loop-around state)
+make mixertest       # mixer and fade host tests (test/): overlay and fade
+                     # checked against independent players on SN76489, NES
+make nes-demo        # stage/build nes/mixdemo.c (BWS=<8bitworkshop>)
 ```

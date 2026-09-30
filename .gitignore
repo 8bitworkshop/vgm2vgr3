@@ -1,3 +1,6 @@
 vgm2vgr3
 *~
 .roundtrip
+test/test_mixer
+test/test_fade
+nes/build

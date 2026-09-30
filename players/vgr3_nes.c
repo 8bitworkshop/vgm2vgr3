@@ -18,9 +18,20 @@
  * player lives in ROM and the file is read in place with #embed.
  */
 
+/* Mixer build: music on layer 0, SFX overlays on layers 1.., optional
+ * fade (see notes/sfxfade.md). The decoder is compiled into this file
+ * (below) so these settings apply to it too; RAM is sized to the NES APU.
+ * A music-only build can drop the first three defines and use Vgr3Player
+ * and vgr3Frame as before. */
+#define VGR3_MIXER
+#define VGR3_SINGLE_MIXER
+#define VGR3_FADE
+#define VGR3_MAX_LAYERS 3       /* music + 2 sfx */
+#define VGR3_MAX_CHANS  12
+#define VGR3_MAX_REGS   0x18    /* VGR3_NREGS_NES_APU */
 #include "vgr3_format.h"
 #include "vgr3_play.h"
-//#link "vgr3_play.c"
+#include "vgr3_play.c"
 
 #include <nes.h>
 
@@ -30,17 +41,19 @@ static void nesApuOut(uint8_t reg, uint8_t val) {
   ((unsigned char *)0x4000)[reg] = val;
 }
 
-static Vgr3Player g_player;
+/* Volume bytes for fading: $4000, $4004, $400C (regs 0, 4, 12). */
+static const uint8_t nesVolMask[3] = { 0x11, 0x10, 0x00 };
+static const Vgr3FadeOps nesFadeOps = { nesVolMask, vgr3AttenLow4 };
 
 static void nesFlush8(uint8_t r0) {
-  uint8_t dirty = g_player.dirty[r0];
+  uint8_t dirty = g_mixer.outDirty[r0];
   uint8_t r,i;
   if (!dirty) return;
-  g_player.dirty[r0] = 0;
+  g_mixer.outDirty[r0] = 0;
   r = r0 << 3;
   for (i=0; i<8; i++) {
     if (dirty & 1) {
-      nesApuOut(r, g_player.regs[r]);
+      nesApuOut(r, g_mixer.outRegs[r]);
     }
     r++;
     dirty >>= 1;
@@ -58,10 +71,13 @@ const unsigned char MUSIC1[] = {
 };
 
 void main(void) {
-  vgr3Init(&g_player, MUSIC1);
+  vgr3MixerInit(MUSIC1);
+  vgr3MixerSetFadeOps(&nesFadeOps);
+  /* e.g. vgr3MixerPlay(1, SFX1); ... vgr3MixerStop(1);
+   *      vgr3MixerFade(0, 4);   fade music over 64 frames */
   while (1) {
     waitvsync();
     nesFlushVgr();  /* flush last frame's writes first: fixed offset from the IRQ */
-    vgr3Frame(&g_player);
+    vgr3MixerFrame();
   }
 }

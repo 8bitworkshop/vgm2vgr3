@@ -97,7 +97,9 @@ enum {
 #define VGR3_NREGS_GB_DMG  0x30
 #define VGR3_NREGS_POKEY   11
 #define VGR3_NREGS_SID     0x19
+#ifndef VGR3_MAX_REGS       /* a platform build may shrink this to its chip's NREGS */
 #define VGR3_MAX_REGS      0x30
+#endif
 
 #define VGR3_OP_DICT_END  0x5C  /* DICT is 0x00..0x5B */
 #define VGR3_OP_EXT       0x5C  /* prefix: next byte is a bulk op */
@@ -113,7 +115,9 @@ enum {
 
 #define VGR3_DICT_MAX     VGR3_OP_DICT_END
 #define VGR3_MAX_DEPTH    4
+#ifndef VGR3_MAX_CHANS      /* likewise: music + sfx channels playing at once */
 #define VGR3_MAX_CHANS    16
+#endif
 #define VGR3_MASK_MAX_W   7    /* widest channel that can use SET masks */
 
 #endif /* VGR3_FORMAT_H */
