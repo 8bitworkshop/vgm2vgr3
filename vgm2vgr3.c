@@ -46,7 +46,6 @@ static void bbPut(ByteBuf *b, const void *p, size_t n) {
 }
 static void bbU8(ByteBuf *b, uint8_t v) { bbPut(b, &v, 1); }
 static void bbU16(ByteBuf *b, uint16_t v) { bbU8(b, (uint8_t)v); bbU8(b, (uint8_t)(v >> 8)); }
-static void bbU32(ByteBuf *b, uint32_t v) { bbU16(b, (uint16_t)v); bbU16(b, (uint16_t)(v >> 16)); }
 
 /* ---------------------------------------------------------------- */
 /* options                                                           */
@@ -353,6 +352,10 @@ static int parseVgm(const uint8_t *file, size_t size) {
         total = (g_elapsed + g_spt / 2) / g_spt;
     if (total < g_nframes) total = g_nframes;
     if (total == 0) total = 1;
+    if (total >= VGR3_LOOP_NONE) {
+        fprintf(stderr, "song is %u frames, over the %u-frame limit; split it\n", total, VGR3_LOOP_NONE - 1);
+        exit(1);
+    }
     if (g_loopFrame != VGR3_LOOP_NONE && g_loopFrame >= total) g_loopFrame = VGR3_LOOP_NONE;
     if (total > g_cap) {
         g_wr = xrealloc(g_wr, (size_t)total * g_nregs);
@@ -876,8 +879,8 @@ static void emitJob(Job *jb, ByteBuf *out) {
     bbU8(out, (uint8_t)g_ndict);
     bbU8(out, 0);
     bbU16(out, (uint16_t)blob.len);
-    bbU32(out, g_nframes);
-    bbU32(out, g_loopFrame);
+    bbU16(out, (uint16_t)g_nframes);
+    bbU16(out, (uint16_t)g_loopFrame);
     for (int c = 0; c < jb->nch; c++) {
         bbU8(out, jb->def[c].base);
         bbU8(out, jb->def[c].w);

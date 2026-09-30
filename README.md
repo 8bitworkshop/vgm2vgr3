@@ -33,7 +33,7 @@ first means:
 ## File format (`vgr3_format.h`)
 
 ```
-Header (20 bytes)
+Header (16 bytes)
 Channel table [numChans]        (4 bytes each: base, width, u16 start)
 Dict table [dictCount]          (2 bytes each: u16 offset)
 <data blob: opcode streams + dictionary entries, back to back>

@@ -7,17 +7,17 @@
  *
  * All multi-byte fields are little-endian.
  *
- *   Header (20 bytes):
+ *   Header (16 bytes):
  *     u8  magic[4]      "VGR3"
  *     u8  version       VGR3_VERSION
  *     u8  chipType      VGR3_CHIP_*
  *     u8  tickRate      frames/second, e.g. 60
  *     u8  numChans
  *     u8  dictCount     0..VGR3_DICT_MAX
- *     u8  reserved
+ *     u8  reserved      0
  *     u16 dataSize      bytes in the data blob
- *     u32 totalFrames   song length (frame of the loop JUMP)
- *     u32 loopFrame     0xFFFFFFFF if the song doesn't loop (info only:
+ *     u16 totalFrames   song length (frame of the loop JUMP), <= 0xFFFE
+ *     u16 loopFrame     0xFFFF if the song doesn't loop (info only:
  *                       the decoder just follows each channel's JUMP).
  *                       vgm2vgr3 --loop turns a source with no loop
  *                       point into a loop-at-frame-0 file (loopFrame 0,
@@ -64,9 +64,9 @@
 #define VGR3_FORMAT_H
 
 #define VGR3_MAGIC       "VGR3"
-#define VGR3_VERSION     1
-#define VGR3_HEADER_SIZE 20
-#define VGR3_LOOP_NONE   0xFFFFFFFFu
+#define VGR3_VERSION     2
+#define VGR3_HEADER_SIZE 16
+#define VGR3_LOOP_NONE   0xFFFFu
 #define VGR3_CHAN_SIZE   4
 
 enum {
