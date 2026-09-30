@@ -69,8 +69,8 @@ const unsigned char MUSIC1[] = {
 
 void vint_handler(void) {
   cv_set_colors(CV_COLOR_BLACK, CV_COLOR_BLUE);
+  colecoFlushVgr();  /* flush last frame's writes first: fixed offset from the IRQ */
   vgr3Frame(&g_player);
-  colecoFlushVgr();
   cv_set_colors(CV_COLOR_BLACK, CV_COLOR_BLACK);
 }
 

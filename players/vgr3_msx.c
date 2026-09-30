@@ -50,8 +50,8 @@ const unsigned char MUSIC1[] = {
 };
 
 void vint_handler(void) {
+  msxFlushVgr();  /* flush last frame's writes first: fixed offset from the IRQ */
   vgr3Frame(&g_player);
-  msxFlushVgr();
 }
 
 void main() {

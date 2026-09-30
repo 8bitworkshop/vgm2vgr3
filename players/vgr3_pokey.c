@@ -70,7 +70,7 @@ void main(void) {
   while (1) {
     /* Once per tick: at 60 Hz that's once per vertical blank. */
     waitvsync();
+    pokeyFlushVgr();  /* flush last frame's writes first: fixed offset from the IRQ */
     vgr3Frame(&g_player);
-    pokeyFlushVgr();
   }
 }

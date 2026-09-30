@@ -61,7 +61,7 @@ void main(void) {
   vgr3Init(&g_player, MUSIC1);
   while (1) {
     waitvsync();
+    nesFlushVgr();  /* flush last frame's writes first: fixed offset from the IRQ */
     vgr3Frame(&g_player);
-    nesFlushVgr();
   }
 }
