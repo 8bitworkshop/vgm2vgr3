@@ -177,6 +177,19 @@ Hardcoded, chip-specific players on top of `vgr3_play.c`:
 These need the target toolchain (they `#embed` a `.vgr3` file) and are
 not built by this Makefile; they are reference glue for a port.
 
+## Comparison with other VGM players
+
+- vgmcomp2 (SN76489 samples): VGR3 is 26–36% smaller on songs of 11 KB or
+  more.  It is 9–30% larger on the tiny ~350 byte sound effects.
+  vgmcomp2 is also lossy, while VGR3 is verified
+  lossless, so this isn't like for like.
+
+- gzip, xz, zstd (not playable on 8-bit): VGR3 is smaller on every sample,
+  by 5–63% against the best of xz and zstd.
+
+- Tracker modules (DefleMask .dmf, NES): VGR3 is 50%-300% larger than the
+  .dmf module files, without samples.
+
 ## Building and testing
 
 ```
