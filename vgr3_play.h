@@ -7,7 +7,7 @@
  * clears dirty[].
  *
  * RAM: VGR3_MAX_REGS + VGR3_MAX_REGS/8 bytes, plus per channel
- * 5 + 3*VGR3_MAX_DEPTH bytes on a target with 2-byte pointers.
+ * 9 + 3*VGR3_MAX_DEPTH bytes on a target with 2-byte pointers.
  */
 
 #ifndef VGR3_PLAY_H
@@ -38,7 +38,8 @@ typedef struct {
     uint8_t width;
     uint8_t k;          /* wait bits in a SET opcode */
     uint8_t wait;       /* frames until the next item */
-    uint8_t sp;
+    uint8_t wmask;      /* (1 << k) - 1: the wait bits of a SET opcode */
+    Vgr3Frame *sp;      /* one past the top stack frame */
 #ifdef VGR3_MIXER
     Vgr3Ctx *ctx;       /* owning layer's context; NULL if the slot is unused */
     uint8_t ended;      /* 0 running, 1 just parked on END, 2 handled */

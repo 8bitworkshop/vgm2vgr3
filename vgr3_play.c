@@ -5,19 +5,23 @@ static uint16_t rd16(const uint8_t *p) {
     return (uint16_t)(p[0] | (p[1] << 8));
 }
 
-static void put(Vgr3Ctx *p, uint8_t r, uint8_t v) {
-    p->regs[r] = v;
-    p->dirty[r >> 3] |= (uint8_t)(1 << (r & 7));
-}
+static const uint8_t bitTab[8] = {1, 2, 4, 8, 16, 32, 64, 128};
+
+/* Table lookup, not 1 << (r & 7): cc65/sdcc compile a variable shift as a
+ * loop. A macro so the SET loop pays no call. */
+#define PUT(p, r, v) do { \
+    (p)->regs[r] = (v); \
+    (p)->dirty[(r) >> 3] |= bitTab[(r) & 7]; \
+} while (0)
 
 /* Executes a SET whose opcode is `op` and whose operands start at q.
  * Returns the address after the operands. */
 static const uint8_t *doSet(Vgr3Ctx *p, Vgr3Chan *c, uint8_t op, const uint8_t *q) {
     uint8_t mask = (uint8_t)((op & 0x7F) >> c->k);
-    uint8_t wait = (uint8_t)(op & ((1 << c->k) - 1));
+    uint8_t wait = (uint8_t)(op & c->wmask);
     uint8_t r = c->base;
     while (mask) {
-        if (mask & 1) put(p, r, *q++);
+        if (mask & 1) { PUT(p, r, *q); q++; }
         mask >>= 1;
         r++;
     }
@@ -27,7 +31,7 @@ static const uint8_t *doSet(Vgr3Ctx *p, Vgr3Chan *c, uint8_t op, const uint8_t *
 }
 
 static void call(Vgr3Chan *c, const uint8_t *target, uint8_t count) {
-    Vgr3Frame *f = &c->stack[c->sp++];
+    Vgr3Frame *f = c->sp++;
     f->ret = c->pc;
     f->left = count;
     c->pc = target;
@@ -37,11 +41,12 @@ static void call(Vgr3Chan *c, const uint8_t *target, uint8_t count) {
 static void step(Vgr3Ctx *p, Vgr3Chan *c) {
     const uint8_t *at;
     uint8_t op;
-    while (c->sp && c->stack[c->sp - 1].left == 0)
-        c->pc = c->stack[--c->sp].ret;
+    Vgr3Frame *f = c->sp;      /* one past the top frame; == c->stack when empty */
+    while (f != c->stack && f[-1].left == 0) c->pc = (--f)->ret;
+    c->sp = f;
     at = c->pc;
     op = *c->pc++;
-    if (c->sp) c->stack[c->sp - 1].left--;
+    if (f != c->stack) f[-1].left--;
 
     if (op & 0x80) {
         c->pc = doSet(p, c, op, c->pc);
@@ -70,7 +75,11 @@ static void step(Vgr3Ctx *p, Vgr3Chan *c) {
             uint8_t sub = *c->pc++;
             if (sub == VGR3_EXT_LOAD) {
                 uint8_t i;
-                for (i = 0; i < c->width; i++) put(p, (uint8_t)(c->base + i), *c->pc++);
+                for (i = 0; i < c->width; i++) {
+                    uint8_t r = (uint8_t)(c->base + i);
+                    PUT(p, r, *c->pc);
+                    c->pc++;
+                }
                 return;
             }
         }
@@ -88,9 +97,10 @@ static void initChan(Vgr3Chan *c, const uint8_t *ct, const uint8_t *data) {
     c->base = ct[0];
     c->width = ct[1];
     c->k = (uint8_t)(c->width <= VGR3_MASK_MAX_W ? 7 - c->width : 7);
+    c->wmask = (uint8_t)((1 << c->k) - 1);
     c->pc = data + rd16(ct + 2);
     c->wait = 0;
-    c->sp = 0;
+    c->sp = c->stack;
 #ifdef VGR3_MIXER
     c->ended = 0;
 #endif
@@ -124,8 +134,8 @@ int vgr3Init(Vgr3Player *p, const uint8_t *file) {
 
 void vgr3Frame(Vgr3Player *p) {
     uint8_t i;
-    for (i = 0; i < p->numChans; i++) {
-        Vgr3Chan *c = &p->chans[i];
+    Vgr3Chan *c = p->chans;     /* walk, don't index: &chans[i] is a multiply on cc65/sdcc */
+    for (i = p->numChans; i; i--, c++) {
         while (c->wait == 0) step((Vgr3Ctx *)p, c);
         c->wait--;
     }
@@ -143,8 +153,6 @@ Vgr3Mixer g_mixer;
 #else
 #define M m
 #endif
-
-static const uint8_t bitTab[8] = {1, 2, 4, 8, 16, 32, 64, 128};
 
 /* Highest active layer below `above` whose mask covers the byte at
  * index i, bit b; VGR3_MAX_LAYERS if none. */
