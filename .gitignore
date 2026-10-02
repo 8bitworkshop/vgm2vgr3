@@ -4,3 +4,6 @@ vgm2vgr3
 test/test_mixer
 test/test_fade
 nes/build
+fuzz/build
+fuzz/in-*
+fuzz/out*

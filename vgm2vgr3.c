@@ -54,6 +54,7 @@ static int g_tickRate = 60;
 static int g_maxDepth = VGR3_MAX_DEPTH;
 static int g_dictMax = VGR3_DICT_MAX;
 static int g_window = 1024;     /* candidates tried per position */
+static int g_truncated;         /* set when a candidate chain was cut off at g_window */
 static int g_cross = 1;         /* CALLs into other channels of the same width */
 static int g_farPenalty = 0;    /* parse bias against CALLs that can't use CALLS */
 static int g_lookahead = 1;     /* parse picks each CALL with one step of lookahead */
@@ -659,13 +660,14 @@ static Match findMatch(const Job *jb, int c, int i, int lim, uint32_t out, Match
         int iEnd = ce;
         if (lp > i) iEnd = lp;   /* the loop item must stay a top-level item */
         int tries = 0;
-        for (int j = g_head[key]; j >= 0 && tries < g_window; j = g_next[j], tries++) {
+        int j;
+        for (j = g_head[key]; j >= 0 && tries < g_window; j = g_next[j], tries++) {
             if (jb->tok[j] != jb->tok[i] || jb->tok[j + 1] != jb->tok[i + 1]) continue;
             int jc = jb->chanOf[j];
             if (jc != c && !g_cross) continue;
             int jEnd = jb->chEnd[jc] < lim ? jb->chEnd[jc] : lim;
             uint32_t dist = out - jb->opos[j];
-            int L = 0, items = 0, dep = 0, lit = 0;
+            int L = 0, items = 0, dep = 0, lit = 0, dcj = g_dcAt[j];
             while (j + L < jEnd && i + L < iEnd && jb->tok[j + L] == jb->tok[i + L]) {
                 if (jb->bnd[j + L]) {
                     if (items == 255 || (jb->dep[j + L] + 1 > g_maxDepth)) break;
@@ -676,17 +678,19 @@ static Match findMatch(const Job *jb, int c, int i, int lim, uint32_t out, Match
                 L++;
                 if (j + L == jEnd || jb->bnd[j + L]) {
                     int form = callForm(items, dist), cost, score;
-                    if (dictCall(j, items) >= 0) score = lit - (cost = 1);
+                    if (dcj >= 0 && dictCall(j, items) >= 0) score = lit - (cost = 1);
                     else score = lit - (cost = kCallCost[form]) - (form != CALL_S ? g_farPenalty : 0);
                     if (score > 0) OFFER(score, j, L, items, dep + 1, cost);
                 }
             }
         }
+        if (j >= 0) g_truncated = 1;
     }
     /* one-item CALL of a single long token */
     if (litCost(jb->tok[i]) > kCallCost[CALL_S] && (lp <= i || lp > i + 1)) {
         int tries = 0;
-        for (int j = g_head1[jb->tok[i]]; j >= 0 && tries < g_window; j = g_next1[j], tries++) {
+        int j;
+        for (j = g_head1[jb->tok[i]]; j >= 0 && tries < g_window; j = g_next1[j], tries++) {
             int jc = jb->chanOf[j];
             if (jc != c && !g_cross) continue;
             int form = callForm(1, out - jb->opos[j]), cost, score;
@@ -694,6 +698,7 @@ static Match findMatch(const Job *jb, int c, int i, int lim, uint32_t out, Match
             else score = litCost(jb->tok[i]) - (cost = kCallCost[form]) - (form != CALL_S ? g_farPenalty : 0);
             if (score > 0) OFFER(score, j, 1, 1, 1, cost);
         }
+        if (j >= 0) g_truncated = 1;
     }
 #undef OFFER
     return best;
@@ -1040,7 +1045,8 @@ int main(int argc, char **argv) {
         int mode = g_layout >= 0 ? g_layout + 1 : li;
         setDict(NULL, 0);
         buildJob(&jb, mode);
-        for (int wi = 0; wi < nWin; wi++)
+        for (int wi = 0; wi < nWin; wi++) {
+            g_truncated = 0;
             for (int ci = 0; ci < nCross; ci++)
                 for (int pi = 0; pi < nPen; pi++) {
                     if (!g_windowSet) g_window = kWindows[wi];
@@ -1062,6 +1068,14 @@ int main(int argc, char **argv) {
                         printf("  layout %d window %4d cross %d penalty %d: best so far %u\n",
                                mode, g_window, g_cross, g_farPenalty, bestSize);
                 }
+            /* No candidate chain reached the window limit, so a larger window
+             * would parse identically: skip the rest. (Leave g_window where the
+             * full loop would have, for anything that reads it after.) */
+            if (!g_windowSet && !g_truncated) {
+                g_window = kWindows[nWin - 1];
+                break;
+            }
+        }
     }
     g_window = bestWin; g_cross = bestCross; g_farPenalty = bestPen;
     setDict(NULL, 0);   /* the per-voice trial encodes must not see a dictionary */

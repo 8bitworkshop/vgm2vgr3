@@ -78,7 +78,7 @@ clean:
 	rm -f vgm2vgr3 *.o
 	rm -rf $(ROUNDTRIP_OUT)
 
-.PHONY: all clean samples roundtrip roundtrip-loop
+.PHONY: all clean samples roundtrip roundtrip-loop fuzz-build fuzz-seeds
 
 # Mixer host test (-DVGR3_MIXER): overlays a short sfx on a music track and
 # checks the merged output against two independent players.
@@ -110,3 +110,21 @@ nes-demo: vgm2vgr3
 	@if [ -n "$(BWS)" ]; then \
 		cd $(BWS) && node gen/tools/8bws.js build -p nes $(CURDIR)/nes/build/mixdemo.c -o $(CURDIR)/nes/build/mixdemo.nes; \
 	else echo "staged nes/build; build with: node gen/tools/8bws.js build -p nes nes/build/mixdemo.c -o mixdemo.nes"; fi
+
+# ---- Fuzzing (needs afl++; see fuzz/README.md) ----
+# Encoder (untrusted VGM in) and decoder (untrusted VGR3 in), both with
+# ASan+UBSan. The decoder is also built with the mixer.
+AFLCC ?= afl-clang-fast
+FUZZFLAGS = -O1 -g -std=c99 -DVGR3_FEAT_EXT=1 -fsanitize=address,undefined -fno-sanitize-recover=undefined
+
+fuzz-build:
+	@mkdir -p fuzz/build
+	AFL_USE_ASAN=1 $(AFLCC) $(FUZZFLAGS) -o fuzz/build/enc vgm2vgr3.c vgr3_play.c
+	AFL_USE_ASAN=1 $(AFLCC) $(FUZZFLAGS) -o fuzz/build/dec fuzz/dec.c vgr3_play.c
+	AFL_USE_ASAN=1 $(AFLCC) $(FUZZFLAGS) -DVGR3_MIXER -o fuzz/build/dec-mixer fuzz/dec.c vgr3_play.c
+
+# Seeds: every sample VGM, and the encoder's own VGR3 output for the decoder.
+fuzz-seeds: vgm2vgr3
+	@mkdir -p fuzz/in-vgm fuzz/in-vgr3
+	find $(SAMPLES_DIR) -type f -iname '*.vgm' -exec cp {} fuzz/in-vgm/ \;
+	@for f in fuzz/in-vgm/*.vgm; do ./vgm2vgr3 --loop "$$f" "fuzz/in-vgr3/$$(basename $$f .vgm).vgr3" >/dev/null 2>&1 || true; done
