@@ -569,7 +569,9 @@ static int addChannel(Job *jb, ChanDef d) {
             else if (mask[f] >> b & 1) vals[nv++] = (uint8_t)(s < 0 ? 0 : s);
         }
         if (d.w > VGR3_MASK_MAX_W) {
-            jobPush(jb, makeTok(d.w, mask[f], vals, 0));
+            /* An empty mask would emit a SET with inline wait 0, which the
+             * decoder reads as "wait byte follows" and eats the next op. */
+            if (mask[f]) jobPush(jb, makeTok(d.w, mask[f], vals, 0));
             pushWait(jb, d.w, wait);
         } else {
             jobPush(jb, makeTok(d.w, mask[f], vals, wait > 255 ? 255 : wait));

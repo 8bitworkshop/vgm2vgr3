@@ -128,3 +128,7 @@ fuzz-seeds: vgm2vgr3
 	@mkdir -p fuzz/in-vgm fuzz/in-vgr3
 	find $(SAMPLES_DIR) -type f -iname '*.vgm' -exec cp {} fuzz/in-vgm/ \;
 	@for f in fuzz/in-vgm/*.vgm; do ./vgm2vgr3 --loop "$$f" "fuzz/in-vgr3/$$(basename $$f .vgm).vgr3" >/dev/null 2>&1 || true; done
+
+fuzz-run: fuzz-build
+	AFL_AUTORESUME=1 AFL_CRASH_EXITCODE=3 afl-fuzz -M m -i fuzz/in-vgm -o fuzz/out-enc -x fuzz/vgm.dict -m none -t 3000 -- fuzz/build/enc --loop --layout 0 --window 64 --no-cross --far-penalty 2 --dict 16 @@ /dev/null
+	#AFL_AUTORESUME=1 AFL_CRASH_EXITCODE=3 afl-fuzz -M m -i fuzz/in-vgm -o fuzz/out-enc -x fuzz/vgm.dict -m none -t 3000 -- fuzz/build/enc --loop @@ /dev/null
