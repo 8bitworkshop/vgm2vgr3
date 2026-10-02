@@ -57,6 +57,11 @@ static int g_window = 1024;     /* candidates tried per position */
 static int g_truncated;         /* set when a candidate chain was cut off at g_window */
 static int g_cross = 1;         /* CALLs into other channels of the same width */
 static int g_farPenalty = 0;    /* parse bias against CALLs that can't use CALLS */
+/* Exit status for an encoder bug (a failed self-check, an internal
+ * inconsistency), as opposed to 1 for input it just can't encode. A fuzzer
+ * can be told to treat it as a crash: AFL_CRASH_EXITCODE=3. */
+#define EXIT_BUG 3
+static int g_bug;
 static int g_lookahead = 1;     /* parse picks each CALL with one step of lookahead */
 static int g_dictCalls = 1;     /* dict entries may be CALLs */
 static int g_windowSet, g_crossSet, g_farPenaltySet;
@@ -855,9 +860,9 @@ static void emitJob(Job *jb, ByteBuf *out) {
         else { bbU8(&blob, VGR3_OP_CALLL); bbU16(&blob, tgt); bbU8(&blob, (uint8_t)e->cnt); }
     }
     for (int c = 0; c < jb->nch; c++) {
-        if (blob.len != jb->chOut[c]) { fprintf(stderr, "internal: channel offset mismatch\n"); exit(1); }
+        if (blob.len != jb->chOut[c]) { fprintf(stderr, "internal: channel offset mismatch\n"); exit(EXIT_BUG); }
         for (int i = jb->chStart[c]; i < jb->chEnd[c]; i += jb->clen[i]) {
-            if (blob.len != jb->opos[i]) { fprintf(stderr, "internal: item offset mismatch\n"); exit(1); }
+            if (blob.len != jb->opos[i]) { fprintf(stderr, "internal: item offset mismatch\n"); exit(EXIT_BUG); }
             if (jb->ctgt[i] < 0) {
                 const Tok *t = &g_toks[jb->tok[i]];
                 if (t->dict >= 0) { bbU8(&blob, (uint8_t)t->dict); g_stat[1]++; }
@@ -876,7 +881,7 @@ static void emitJob(Job *jb, ByteBuf *out) {
         if (jb->chLoop[c] >= 0) { bbU8(&blob, VGR3_OP_JUMP); bbU16(&blob, (uint16_t)jb->opos[jb->chLoop[c]]); }
         else bbU8(&blob, VGR3_OP_END);
     }
-    if (blob.len != jb->size) { fprintf(stderr, "internal: size mismatch\n"); exit(1); }
+    if (blob.len != jb->size) { fprintf(stderr, "internal: size mismatch\n"); exit(EXIT_BUG); }
     if (blob.len > 0xFFFF) { fprintf(stderr, "song data is %zu bytes, over the 64K limit\n", blob.len); exit(1); }
 
     bbPut(out, VGR3_MAGIC, 4);
@@ -912,7 +917,7 @@ static int verify(const uint8_t *file, const Job *jb) {
         fprintf(stderr, "VERIFY: no channels encoded, nothing to verify\n");
         return 0;
     }
-    if (!vgr3Init(&pl, file)) { fprintf(stderr, "VERIFY: decoder rejected file\n"); return 0; }
+    if (!vgr3Init(&pl, file)) { fprintf(stderr, "VERIFY: decoder rejected file\n"); g_bug = 1; return 0; }
     uint32_t F = g_nframes, L = g_loopFrame;
     uint32_t frames = L == VGR3_LOOP_NONE ? F : F + (F - L);
     long errors = 0;
@@ -937,6 +942,7 @@ static int verify(const uint8_t *file, const Job *jb) {
         }
         memset(pl.dirty, 0, sizeof(pl.dirty));
     }
+    if (errors) g_bug = 1;
     return errors == 0;
 }
 
@@ -1087,7 +1093,7 @@ int main(int argc, char **argv) {
     parseJob(&jb);
     if (jb.size + 2 * g_ndict + VGR3_CHAN_SIZE * jb.nch != bestSize) {
         fprintf(stderr, "internal: final parse %u != best %u\n", jb.size, bestSize);
-        exit(1);
+        exit(EXIT_BUG);
     }
     printf("layout %d, window %d, cross %d, far penalty %d\n", bestLay, g_window, g_cross, g_farPenalty);
 
@@ -1107,7 +1113,7 @@ int main(int argc, char **argv) {
     int ok = verify(out.data, &jb);
     if (!ok && !force) {
         fprintf(stderr, "verification failed, refusing to write %s (use --force)\n", outPath);
-        return 1;
+        return g_bug ? EXIT_BUG : 1;
     }
     FILE *o = fopen(outPath, "wb");
     if (!o) { fprintf(stderr, "cannot write %s\n", outPath); return 1; }
@@ -1128,5 +1134,5 @@ int main(int argc, char **argv) {
                    g_sampleBlocks == 1 ? "" : "s");
         }
     }
-    return ok ? 0 : 1;
+    return ok ? 0 : g_bug ? EXIT_BUG : 1;
 }
