@@ -217,7 +217,10 @@ static void nesWrite(uint8_t a, uint8_t v) {
 }
 
 static void gbWrite(uint8_t a, uint8_t v) {
-    if (a > 0x2F || (a > 0x16 && a < 0x20)) return;
+    /* 0x05 ($FF15) and 0x0F ($FF1F) are unused on the DMG and no voice
+     * covers them, so a game that sweeps them (some clear NR10-NR52 in a
+     * loop) must not leave unreachable writes in the source state. */
+    if (a > 0x2F || (a > 0x16 && a < 0x20) || a == 0x05 || a == 0x0F) return;
     regWrite(a, v, (a == 0x4 || a == 0x9 || a == 0xE || a == 0x13) && (v & 0x80));
 }
 

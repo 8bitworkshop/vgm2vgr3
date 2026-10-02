@@ -1,5 +1,5 @@
 CC ?= cc
-CFLAGS ?= -O2 -Wall -Wextra -std=c99 -DVGR3_FEAT_EXT=1
+CFLAGS ?= -O3 -Wall -Wextra -std=c99 -DVGR3_FEAT_EXT=1
 
 all: vgm2vgr3
 
