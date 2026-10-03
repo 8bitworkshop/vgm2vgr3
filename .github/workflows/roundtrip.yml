@@ -1,0 +1,18 @@
+name: roundtrip
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  roundtrip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: make
+
+      - name: Roundtrip
+        run: make roundtrip
