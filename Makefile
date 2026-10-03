@@ -99,6 +99,14 @@ mixertest: vgm2vgr3 test/test_mixer test/test_fade
 	./test/test_fade $(ROUNDTRIP_OUT)/mx-music.vgr3 $(ROUNDTRIP_OUT)/mx-sfx.vgr3 sn 2 5 8 10
 	./test/test_fade $(ROUNDTRIP_OUT)/mx-nmusic.vgr3 $(ROUNDTRIP_OUT)/mx-nsfx.vgr3 low 0 4 12
 
+# Player glue under the 8bitworkshop emulator: builds each players/vgr3_*.c
+# with 8bws and diffs g_player.regs against the host decoder every frame.
+# make bwstest [BWS=~/PuzzlingPlans/8bitworkshop] [BWSFRAMES=N]
+bwstest: vgm2vgr3 test/dump_regs.c
+	@fail=0; for p in coleco gb msx sid pokey pokey5200 nes-mixer; do \
+		python3 test/bws_check.py $(if $(BWSFRAMES),-n $(BWSFRAMES)) $(if $(BWS),--bws $(BWS)) $$p || fail=1; \
+	done; [ $$fail -eq 0 ]
+
 # NES mixer demo (nes/mixdemo.c): stages the sources and two .vgr3 files in
 # nes/build/, then builds the ROM with the 8bitworkshop CLI if BWS points at
 # a checkout (make nes-demo BWS=~/PuzzlingPlans/8bitworkshop).

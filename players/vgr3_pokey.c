@@ -23,7 +23,8 @@
  * storage). So a value-equal write that still resets the timers is
  * preserved by the dirty bitmap.
  *
- * POKEY_BASE is the Atari 8-bit map ($D200); the 5200 uses $E800.
+ * POKEY_BASE is the Atari 8-bit map ($D200); the 5200 ($E800) is selected
+ * by __ATARI5200__, which cc65 defines for --target atari5200.
  * The file is read in place, so it must live in ROM.
  */
 
@@ -31,9 +32,13 @@
 #include "vgr3_play.h"
 //#link "vgr3_play.c"
 
+#ifdef __ATARI5200__
+#include <atari5200.h>
+#define POKEY_BASE 0xE800   /* Atari 5200 */
+#else
 #include <atari.h>
-
-#define POKEY_BASE 0xD200
+#define POKEY_BASE 0xD200   /* Atari 400/800/XL */
+#endif
 
 static void pokeyOut(uint8_t reg, uint8_t val) {
   ((unsigned char *)POKEY_BASE)[reg] = val;
@@ -57,8 +62,8 @@ static void pokeyFlush8(uint8_t r0) {
 }
 
 void pokeyFlushVgr(void) {
-  pokeyFlush8(0);
-  pokeyFlush8(8);
+  pokeyFlush8(0);   /* regs 0x00-0x07 */
+  pokeyFlush8(1);   /* regs 0x08-0x0F: the argument is the dirty byte index */
 }
 
 const unsigned char MUSIC1[] = {

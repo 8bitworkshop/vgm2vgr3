@@ -1,20 +1,25 @@
 # vgm2vgr3 / VGR3
 
 A register-based compression format and toolchain for VGM chiptune
-captures. Instead of storing the original VGM command stream (a
-timestamped log of raw port writes), a `.vgr3` file splits a song into
-per-voice *channels*. Each channel owns a contiguous slice of a global
-shadow register file and runs its own tiny opcode stream. The decoder is
-one small per-tick interpreter that knows nothing about any chip; all
-chip/platform knowledge lives in a thin platform-specific glue layer on
-top of it.
+captures.
 
 ## Why
 
-The raw VGM stream mixes timing, chip selection, and register semantics
+Most music trackers have a bespoke format for their music files,
+requiring bespoke players for each platform.
+
+Instead, you can export a VGM from the tracker (if the tracker supports it).
+A VGM file records the precise timing of every write to an audio register.
+
+The raw VGM stream is pretty huge.
+It mixes timing, chip selection, and register semantics
 together, which makes it awkward to compress well and awkward to play
-back on constrained 8-bit targets (Z80, 6502, ...). Splitting by voice
-first means:
+back on constrained 8-bit targets.
+
+This utility compresses the VGM file into a VGR3 file,
+which is much smaller and doesn't need to be decompressed to play.
+
+## The approach
 
 - A channel is just `{base, pc, wait, call stack}`. Ops write bytes into
   the register file and set a dirty bit; the platform glue flushes dirty
@@ -29,8 +34,15 @@ first means:
 - The encoder is self-verifying: it decodes its own output with the real
   playback routine and refuses to write a file that doesn't match the
   source frame by frame.
+- For sound effects and fade out, a mixer layer sits on top of the player
+  layer.
 
 ## File format (`vgr3_format.h`)
+
+Instead of storing the original VGM command stream (a
+timestamped log of raw port writes), a `.vgr3` file splits a song into
+per-voice *channels*. Each channel owns a contiguous slice of a global
+shadow register file and runs its own tiny opcode stream.
 
 ```
 Header (16 bytes)
@@ -97,6 +109,11 @@ register is in `0x00-0x18`. A real YM2151 (registers `>= 0x20`) is
 rejected as unsupported.
 
 ## Decoder: `vgr3_play.c` / `vgr3_play.h`
+
+The decoder is
+one small per-tick interpreter that knows nothing about any chip; all
+chip/platform knowledge lives in a thin platform-specific glue layer on
+top of it.
 
 The generic playback core, meant to be dropped onto a target unmodified:
 
@@ -201,5 +218,6 @@ make roundtrip       # encodes every sample under samples/; vgm2vgr3
 make roundtrip-loop  # same with --loop (exercises the loop-around state)
 make mixertest       # mixer and fade host tests (test/): overlay and fade
                      # checked against independent players on SN76489, NES
-make nes-demo        # stage/build nes/mixdemo.c (BWS=<8bitworkshop>)
+make bwstest         # test players with 8bws CLI
+make nes-demo        # stage/build nes/mixdemo.c
 ```
