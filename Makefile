@@ -7,6 +7,16 @@ all: vgm2vgr3
 vgm2vgr3: vgm2vgr3.c vgr3_play.c vgr3_format.h vgr3_play.h vgm_format.h
 	$(CC) $(CFLAGS) -o $@ vgm2vgr3.c vgr3_play.c
 
+# WASI build of the encoder (run with wasmtime/wasmer/node). Needs the
+# wasi-sdk clang; override WASI_SDK if it is not in ~/wasi-sdk.
+#   make wasi
+#   wasmtime run --dir . vgm2vgr3.wasm in.vgm out.vgr3
+WASI_SDK ?= $(HOME)/wasi-sdk
+WASI_CC := $(WASI_SDK)/bin/clang
+wasi: vgm2vgr3.wasm
+vgm2vgr3.wasm: vgm2vgr3.c vgr3_play.c vgr3_format.h vgr3_play.h vgm_format.h
+	$(WASI_CC) $(CFLAGS) -o $@ vgm2vgr3.c vgr3_play.c
+
 SAMPLES_DIR ?= samples
 VGR3_DIR ?= vgr3
 ROUNDTRIP_OUT := .roundtrip
@@ -75,10 +85,10 @@ roundtrip-loop: vgm2vgr3
 	[ $$fail -eq 0 ]
 
 clean:
-	rm -f vgm2vgr3 *.o
+	rm -f vgm2vgr3 vgm2vgr3.wasm *.o
 	rm -rf $(ROUNDTRIP_OUT)
 
-.PHONY: all clean samples roundtrip roundtrip-loop fuzz-build fuzz-seeds
+.PHONY: all clean samples roundtrip roundtrip-loop fuzz-build fuzz-seeds wasi
 
 # Mixer host test (-DVGR3_MIXER): overlays a short sfx on a music track and
 # checks the merged output against two independent players.
