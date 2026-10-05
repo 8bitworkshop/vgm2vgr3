@@ -1,4 +1,5 @@
 vgm2vgr3
+vgm2vgr3.wasm
 *~
 .roundtrip
 test/test_mixer
