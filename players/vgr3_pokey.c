@@ -52,7 +52,7 @@ static void pokeyFlush8(uint8_t r0) {
   if (!dirty) return;
   g_player.dirty[r0] = 0;
   r = r0 << 3;
-  for (i=0; i<8; i++) {
+  while (dirty) {
     if (dirty & 1) {
       pokeyOut(r, g_player.regs[r]);
     }

@@ -33,7 +33,7 @@ static void colecoFlush8(uint8_t r0, uint8_t n, uint8_t t, uint8_t cc) {
    if (!dirty) return;
    g_player.dirty[r0] = 0;
    r = r0 << 3;
-   for (i = 0; i < n; i++) {
+   while (dirty) {
      if (dirty & 1) {
        v = g_player.regs[r];
        if (r >= 9) {

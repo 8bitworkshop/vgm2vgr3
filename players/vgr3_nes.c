@@ -51,7 +51,7 @@ static void nesFlush8(uint8_t r0) {
   if (!dirty) return;
   g_mixer.outDirty[r0] = 0;
   r = r0 << 3;
-  for (i=0; i<8; i++) {
+  while (dirty) {
     if (dirty & 1) {
       nesApuOut(r, g_mixer.outRegs[r]);
     }
